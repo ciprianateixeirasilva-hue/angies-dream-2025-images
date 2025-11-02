@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>angies-dream-2025-images — Gallery</title>
+  <meta name="description" content="Galeria pública para automação de prompts — Cipriana" />
+  <style>
+    :root{--maxw:1200px}
+    *{box-sizing:border-box}
+    body{font:16px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,Arial,sans-serif;margin:0;color:#111}
+    header{position:sticky;top:0;background:#fff;border-bottom:1px solid #eee;z-index:10}
+    .wrap{max-width:var(--maxw);margin:0 auto;padding:16px}
+    h1{font-size:20px;margin:0 0 8px}
+    .sub{color:#666;font-size:14px}
+    .controls{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+    input[type="search"],select{padding:10px 12px;border:1px solid #ddd;border-radius:10px;min-width:160px}
+    main{max-width:var(--maxw);margin:0 auto;padding:16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+    .card{border:1px solid #eee;border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+    .thumb{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;background:#f6f6f6}
+    .meta{padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%}
+    .size{font-size:12px;color:#666}
+    .empty{padding:48px;text-align:center;color:#777}
+    footer{max-width:var(--maxw);margin:24px auto 40px;padding:0 16px;color:#777;font-size:13px}
+    .badge{display:inline-block;padding:4px 8px;border:1px solid #ddd;border-radius:999px;font-size:12px}
+  </style>
+
+  <script>
+    const CONFIG = {
+      repoOwner: "ciprianateixeirasilva-hue",
+      repoName:  "angies-dream-2025-images",
+      branch:    "main",
+      imagesDir: "images"
+    };
+
+    const API_BASE = `https://api.github.com/repos/${CONFIG.repoOwner}/${CONFIG.repoName}/contents/${CONFIG.imagesDir}?ref=${CONFIG.branch}`;
+    const RAW_BASE = `https://raw.githubusercontent.com/${CONFIG.repoOwner}/${CONFIG.repoName}/${CONFIG.branch}/${CONFIG.imagesDir}`;
+
+    async function fetchImages() {
+      const res = await fetch(API_BASE, { headers: { 'Accept': 'application/vnd.github+json' }});
+      if (!res.ok) throw new Error('Erro ao obter imagens. Verifica owner/repo e se /images existe.');
+      const data = await res.json();
+      const allowed = [".jpg",".jpeg",".png",".webp",".gif"];
+      return data
+        .filter(x => x.type === 'file' && allowed.some(ext => x.name.toLowerCase().endsWith(ext)))
+        .map(x => ({
+          name: x.name,
+          url: `${RAW_BASE}/${encodeURIComponent(x.name)}`,
+          size: x.size
+        }));
+    }
+
+    function humanSize(bytes){
+      if(bytes < 1024) return `${bytes} B`;
+      const units=["KB","MB","GB"]; let u=-1;
+      do{bytes/=1024;u++;}while(bytes>=1024&&u<units.length-1);
+      return `${bytes.toFixed(bytes<10?2:1)} ${units[u]}`;
+    }
+
+    function naturalCompare(a,b){
+      return a.localeCompare(b, undefined, { numeric:true, sensitivity:'base' });
+    }
+
+    function render(list){
+      const grid = document.querySelector('.grid');
+      const q = (document.querySelector('#q').value||'').trim().toLowerCase();
+      const sort = document.querySelector('#sort').value;
+
+      let items = list.slice();
+      if(q) items = items.filter(it => it.name.toLowerCase().includes(q));
+      if(sort === 'az') items.sort((a,b)=>naturalCompare(a.name,b.name));
+      if(sort === 'za') items.sort((a,b)=>naturalCompare(b.name,a.name));
+      if(sort === 'small') items.sort((a,b)=>a.size-b.size);
+      if(sort === 'big') items.sort((a,b)=>b.size-a.size);
+
+      grid.innerHTML = '';
+      if(!items.length){ grid.innerHTML = `<div class="empty">Sem resultados.</div>`; return; }
+
+      for(const it of items){
+        const card = document.createElement('a');
+        card.className = 'card';
+        card.href = it.url;
+        card.target = '_blank';
+        card.innerHTML = `
+          <img class="thumb" loading="lazy" src="${it.url}" alt="${it.name}" />
+          <div class="meta">
+            <div class="name" title="${it.name}">${it.name}</div>
+            <div class="size">${humanSize(it.size)}</div>
+          </div>`;
+        grid.appendChild(card);
+      }
+
+      document.querySelector('#count').textContent = `${items.length} ficheiro(s)`;
+    }
+
+    let CACHE = [];
+    async function init(){
+      try{
+        CACHE = await fetchImages();
+        render(CACHE);
+      }catch(err){
+        document.querySelector('.grid').innerHTML = `<div class="empty">${err.message}</div>`;
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', ()=>{
+      document.querySelector('#q').addEventListener('input', ()=>render(CACHE));
+      document.querySelector('#sort').addEventListener('change', ()=>render(CACHE));
+      init();
+    });
+  </script>
+</head>
+
+<body>
+  <header>
+    <div class="wrap">
+      <h1>angies-dream-2025-images <span class="badge">público</span></h1>
+      <div class="sub">Galeria pública dos teus assets visuais</div>
+      <div class="controls">
+        <input id="q" type="search" placeholder="Procurar imagem…" />
+        <select id="sort">
+          <option value="az">A → Z</option>
+          <option value="za">Z → A</option>
+          <option value="small">Menor tamanho</option>
+          <option value="big">Maior tamanho</option>
+        </select>
+        <span id="count" class="badge"></span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="grid"></div>
+  </main>
+
+  <footer>
+    <p>Powered by GitHub · Galeria automação Angie’s Dream 2025 — The Ascension</p>
+  </footer>
+</body>
+</html>
