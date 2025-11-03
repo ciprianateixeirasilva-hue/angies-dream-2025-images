@@ -1,48 +1,108 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>Diagnóstico — localizar imagens</title>
-<h1>Diagnóstico — localizar imagens no repositório</h1>
-<pre id="out" style="white-space:pre-wrap;font:14px/1.5 system-ui;padding:12px;border:1px solid #eee;border-radius:10px;max-width:900px;"></pre>
+<html lang="pt">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Galeria — angies-dream-2025-images</title>
+<style>
+:root{--maxw:1200px}
+*{box-sizing:border-box}
+body{font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Inter,Arial,sans-serif;margin:0;color:#111}
+header{position:sticky;top:0;background:#fff;border-bottom:1px solid #eee;z-index:10}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 8px}
+.controls{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+input[type=search],select{padding:10px;border:1px solid #ddd;border-radius:10px;min-width:160px}
+.badge{display:inline-block;margin-left:8px;background:#eee;padding:2px 8px;border-radius:12px;font-size:12px}
+main{max-width:var(--maxw);margin:0 auto;padding:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.card{border:1px solid #eee;border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.thumb{width:100%;aspect-ratio:4/5;object-fit:cover;background:#f6f6f6}
+.meta{padding:8px 10px;display:flex;justify-content:space-between;font-size:12px}
+.name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%}
+.empty{padding:48px;text-align:center;color:#777}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Galeria — angies-dream-2025-images <span id="badge" class="badge">a detetar…</span></h1>
+    <div class="controls">
+      <input id="q" type="search" placeholder="Pesquisar…">
+      <select id="sort"><option value="az">A→Z</option><option value="za">Z→A</option><option value="small">Menor</option><option value="big">Maior</option></select>
+      <span id="count" class="badge">0</span>
+    </div>
+  </div>
+</header>
+
+<main><div class="grid"></div></main>
+
 <script>
 const OWNER="ciprianateixeirasilva-hue";
 const REPO ="angies-dream-2025-images";
 const BRANCHES=["main","master"];
-const exts=[".jpg",".jpeg",".png",".webp",".gif",".JPG",".JPEG",".PNG",".WEBP",".GIF"];
-const out=document.getElementById("out");
+// ordem de procura: raiz (""), /images, /imagens
+const DIRS=["","images","imagens"];
+const PAGES_BASE=`https://${OWNER}.github.io/${REPO}`;
 
-function line(s){ out.textContent += s + "\n"; }
-async function list(path, branch){
-  const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}?ref=${branch}`;
-  const res = await fetch(url, {headers:{'Accept':'application/vnd.github+json'}});
-  if(!res.ok) return null;
-  return res.json();
+function api(branch, dir){
+  const path = dir ? `/${dir}` : "";
+  return `https://api.github.com/repos/${OWNER}/${REPO}/contents${path}?ref=${branch}`;
 }
-(async ()=>{
+async function list(branch,dir){
+  const res=await fetch(api(branch,dir),{headers:{'Accept':'application/vnd.github+json'}});
+  if(!res.ok) return null;
+  const data=await res.json();
+  const allowed = [".jpg",".jpeg",".png",".webp",".gif",".JPG",".JPEG",".PNG",".WEBP",".GIF"];
+  const files=(data||[]).filter(x=>x.type==="file" && allowed.some(ext=>x.name.endsWith(ext)));
+  return {branch,dir,files};
+}
+async function discover(){
   for(const b of BRANCHES){
-    line(`\n=== RAMO: ${b} ===`);
-    const root = await list("", b);
-    if(!root){ line("  (sem acesso ou não existe)"); continue; }
-
-    const filesRoot = root.filter(x=>x.type==="file");
-    const dirsRoot  = root.filter(x=>x.type==="dir");
-    line(`  • Ficheiros na raiz: ${filesRoot.length}`);
-    filesRoot.forEach(f=>line(`     - ${f.name}`));
-    line(`  • Pastas na raiz: ${dirsRoot.length}`);
-    dirsRoot.forEach(d=>line(`     - ${d.name}/`));
-
-    // verificar todas as pastas da raiz
-    for(const d of dirsRoot){
-      const inside = await list(d.name, b);
-      if(!inside) continue;
-      const imgs = inside.filter(x=>x.type==="file" && exts.some(ext=>x.name.endsWith(ext)));
-      if(imgs.length){
-        line(`\n  ➜ ENCONTREI IMAGENS em /${d.name} (ramo ${b}): ${imgs.length} ficheiro(s)`);
-        imgs.slice(0,50).forEach(f=>line(`     - ${d.name}/${f.name}`));
-      } else {
-        line(`\n  (sem imagens em /${d.name} no ramo ${b})`);
-      }
+    for(const d of DIRS){
+      const hit=await list(b,d);
+      if(hit && hit.files.length) return hit;
     }
   }
-  line("\n— fim do diagnóstico —");
+  return null;
+}
+function human(n){ if(n<1024)return `${n} B`; const u=["KB","MB","GB"]; let i=-1; do{n/=1024;i++;}while(n>=1024&&i<u.length-1); return `${n.toFixed(1)} ${u[i]}`; }
+function render(state){
+  const q = document.getElementById("q").value.toLowerCase();
+  const sort = document.getElementById("sort").value;
+  let items = state.files.filter(f=>f.name.toLowerCase().includes(q));
+
+  if(sort==="az") items.sort((a,b)=>a.name.localeCompare(b.name));
+  if(sort==="za") items.sort((a,b)=>b.name.localeCompare(a.name));
+  if(sort==="small") items.sort((a,b)=>(a.size||0)-(b.size||0));
+  if(sort==="big") items.sort((a,b)=>(b.size||0)-(a.size||0));
+
+  const grid=document.querySelector(".grid");
+  grid.innerHTML = items.length? "" : `<div class="empty">Sem imagens detectadas na pasta selecionada.</div>`;
+
+  for(const f of items){
+    const prefix = state.dir ? `/${state.dir}` : "";
+    const url = `${PAGES_BASE}${prefix}/${encodeURIComponent(f.name)}`; // serve do próprio Pages
+    const a=document.createElement("a");
+    a.className="card"; a.href=url; a.target="_blank"; a.rel="noopener";
+    a.innerHTML=`<img class="thumb" loading="lazy" src="${url}" alt="${f.name}">
+                 <div class="meta"><span class="name" title="${f.name}">${f.name}</span><span>${human(f.size||0)}</span></div>`;
+    grid.appendChild(a);
+  }
+  document.getElementById("count").textContent = items.length;
+}
+
+(async ()=>{
+  const badge=document.getElementById("badge");
+  badge.textContent="a detetar…";
+  const hit = await discover();
+  if(!hit){ badge.textContent="nenhum diretório encontrado"; return; }
+  badge.textContent = hit.dir ? `${hit.branch} / ${hit.dir}` : `${hit.branch} / raiz`;
+  window.__STATE__ = hit;
+  render(hit);
+  document.getElementById("q").oninput = ()=>render(window.__STATE__);
+  document.getElementById("sort").onchange = ()=>render(window.__STATE__);
 })();
 </script>
+</body>
+</html>
