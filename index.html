@@ -1,23 +1,48 @@
-<<!doctype html>
+<!doctype html>
 <meta charset="utf-8">
-<title>Teste direto — caminho das imagens</title>
-<h1>Teste direto — sem API</h1>
-<p>Este teste tenta carregar o mesmo ficheiro em duas pastas possíveis.</p>
-
-<div id="out" style="font:14px/1.5 system-ui; padding:12px; border:1px solid #eee; border-radius:10px; max-width:700px;"></div>
-
+<title>Diagnóstico — localizar imagens</title>
+<h1>Diagnóstico — localizar imagens no repositório</h1>
+<pre id="out" style="white-space:pre-wrap;font:14px/1.5 system-ui;padding:12px;border:1px solid #eee;border-radius:10px;max-width:900px;"></pre>
 <script>
-const FILE = "FB_IMG_1761754327615.jpg"; // nome exato do ficheiro
-const DIRS = ["imagens","images"];       // tentamos ambos
-const out = document.getElementById("out");
+const OWNER="ciprianateixeirasilva-hue";
+const REPO ="angies-dream-2025-images";
+const BRANCHES=["main","master"];
+const exts=[".jpg",".jpeg",".png",".webp",".gif",".JPG",".JPEG",".PNG",".WEBP",".GIF"];
+const out=document.getElementById("out");
 
-function addLine(html){ out.insertAdjacentHTML("beforeend", html); }
+function line(s){ out.textContent += s + "\n"; }
+async function list(path, branch){
+  const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}?ref=${branch}`;
+  const res = await fetch(url, {headers:{'Accept':'application/vnd.github+json'}});
+  if(!res.ok) return null;
+  return res.json();
+}
+(async ()=>{
+  for(const b of BRANCHES){
+    line(`\n=== RAMO: ${b} ===`);
+    const root = await list("", b);
+    if(!root){ line("  (sem acesso ou não existe)"); continue; }
 
-DIRS.forEach(dir=>{
-  const url = `${dir}/${encodeURIComponent(FILE)}`;
-  const img = new Image();
-  img.onload = ()=> addLine(`<p>✅ <strong>Carregou:</strong> <code>${url}</code><br><img src="${url}" style="max-width:320px; display:block; margin-top:6px;"></p>`);
-  img.onerror = ()=> addLine(`<p>❌ <strong>Não encontrou:</strong> <code>${url}</code></p>`);
-  img.src = url;
-});
+    const filesRoot = root.filter(x=>x.type==="file");
+    const dirsRoot  = root.filter(x=>x.type==="dir");
+    line(`  • Ficheiros na raiz: ${filesRoot.length}`);
+    filesRoot.forEach(f=>line(`     - ${f.name}`));
+    line(`  • Pastas na raiz: ${dirsRoot.length}`);
+    dirsRoot.forEach(d=>line(`     - ${d.name}/`));
+
+    // verificar todas as pastas da raiz
+    for(const d of dirsRoot){
+      const inside = await list(d.name, b);
+      if(!inside) continue;
+      const imgs = inside.filter(x=>x.type==="file" && exts.some(ext=>x.name.endsWith(ext)));
+      if(imgs.length){
+        line(`\n  ➜ ENCONTREI IMAGENS em /${d.name} (ramo ${b}): ${imgs.length} ficheiro(s)`);
+        imgs.slice(0,50).forEach(f=>line(`     - ${d.name}/${f.name}`));
+      } else {
+        line(`\n  (sem imagens em /${d.name} no ramo ${b})`);
+      }
+    }
+  }
+  line("\n— fim do diagnóstico —");
+})();
 </script>
