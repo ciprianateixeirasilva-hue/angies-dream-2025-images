@@ -1,9 +1,23 @@
-<!doctype html>
+<<!doctype html>
 <meta charset="utf-8">
-<title>Teste direto</title>
+<title>Teste direto — caminho das imagens</title>
 <h1>Teste direto — sem API</h1>
-<p>Se vires as imagens abaixo, o Pages está OK e vamos reativar a grelha dinâmica.</p>
+<p>Este teste tenta carregar o mesmo ficheiro em duas pastas possíveis.</p>
 
-<p><img src="images/FB_IMG_1761754327615.jpg" style="max-width:300px"></p>
-<p><img src="images/FB_IMG_1761754363753.jpg" style="max-width:300px"></p>
-<p><img src="images/FB_IMG_1761754465563.jpg" style="max-width:300px"></p>
+<div id="out" style="font:14px/1.5 system-ui; padding:12px; border:1px solid #eee; border-radius:10px; max-width:700px;"></div>
+
+<script>
+const FILE = "FB_IMG_1761754327615.jpg"; // nome exato do ficheiro
+const DIRS = ["imagens","images"];       // tentamos ambos
+const out = document.getElementById("out");
+
+function addLine(html){ out.insertAdjacentHTML("beforeend", html); }
+
+DIRS.forEach(dir=>{
+  const url = `${dir}/${encodeURIComponent(FILE)}`;
+  const img = new Image();
+  img.onload = ()=> addLine(`<p>✅ <strong>Carregou:</strong> <code>${url}</code><br><img src="${url}" style="max-width:320px; display:block; margin-top:6px;"></p>`);
+  img.onerror = ()=> addLine(`<p>❌ <strong>Não encontrou:</strong> <code>${url}</code></p>`);
+  img.src = url;
+});
+</script>
