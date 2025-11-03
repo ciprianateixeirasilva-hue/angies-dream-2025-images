@@ -41,8 +41,9 @@ main{max-width:var(--maxw);margin:0 auto;padding:16px}
 const OWNER="ciprianateixeirasilva-hue";
 const REPO ="angies-dream-2025-images";
 const BRANCHES=["main","master"];
-// ordem de procura: raiz (""), /images, /imagens
-const DIRS=["","images","imagens"];
+const DIRS = ["","images","imagens"];
+const DIRS = ["images","imagens",""];
+
 const PAGES_BASE=`https://${OWNER}.github.io/${REPO}`;
 
 function api(branch, dir){
