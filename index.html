@@ -1,49 +1,44 @@
 <script>
-  // CONFIG — usa "imagens" (PT) e também tenta "images" (EN) como fallback
+  // Autodetecta branch e diretório; usa download_url da API (evita 404 de raw)
   const CONFIG = {
-    repoOwner: "ciprianateixeirasilva-hue",
-    repoName:  "angies-dream-2025-images",
-    branch:    "main",
-    imagesDir: "imagens" // <- tua pasta atual
+    owner:  "ciprianateixeirasilva-hue",
+    repo:   "angies-dream-2025-images",
+    branches: ["main","master"],
+    dirs:     ["imagens","images"],
   };
 
-  const ALT_DIRS = [CONFIG.imagesDir, "images"]; // tenta as duas
-
-  function apiUrl(dir){
-    return `https://api.github.com/repos/${CONFIG.repoOwner}/${CONFIG.repoName}/contents/${dir}?ref=${CONFIG.branch}`;
-  }
-  function rawUrl(dir, name){
-    return `https://raw.githubusercontent.com/${CONFIG.repoOwner}/${CONFIG.repoName}/${CONFIG.branch}/${dir}/${encodeURIComponent(name)}`;
+  function apiUrl(branch, dir){
+    return `https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${dir}?ref=${branch}`;
   }
 
-  async function listDir(dir){
-    const res = await fetch(apiUrl(dir), { headers: { 'Accept': 'application/vnd.github+json' }});
-    if (!res.ok) return [];
+  async function listDir(branch, dir){
+    const res = await fetch(apiUrl(branch, dir), { headers: { 'Accept': 'application/vnd.github+json' }});
+    if (!res.ok) return { files: [], branch, dir, status: res.status, err: await res.text() };
     const data = await res.json();
     const allowed = [".jpg",".jpeg",".png",".webp",".gif"];
-    return (data||[])
-      .filter(x => x.type === "file" && allowed.some(ext => x.name.toLowerCase().endsWith(ext)))
-      .map(x => ({ name: x.name, url: rawUrl(dir, x.name), size: x.size }));
+    const files = (data||[])
+      .filter(x => x.type === "file" && x.download_url && allowed.some(ext => x.name.toLowerCase().endsWith(ext)))
+      .map(x => ({ name: x.name, url: x.download_url, size: x.size }));
+    return { files, branch, dir, status: 200 };
   }
 
-  async function fetchAll(){
-    // Tenta primeiro a pasta definida, depois a alternativa
-    for (const dir of ALT_DIRS){
-      const files = await listDir(dir);
-      if (files.length) return files;
+  async function discover(){
+    for (const branch of CONFIG.branches){
+      for (const dir of CONFIG.dirs){
+        const { files } = await listDir(branch, dir);
+        if (files.length) return { files, branch, dir };
+      }
     }
-    return [];
+    return { files: [], branch: null, dir: null };
   }
 
   function humanSize(bytes){
     if(bytes < 1024) return `${bytes} B`;
-    const units=["KB","MB","GB"]; let u=-1;
-    do{bytes/=1024;u++;}while(bytes>=1024&&u<units.length-1);
-    return `${bytes.toFixed(bytes<10?2:1)} ${units[u]}`;
+    const u = ["KB","MB","GB"]; let i=-1;
+    do{bytes/=1024;i++;}while(bytes>=1024 && i<u.length-1);
+    return `${bytes.toFixed(bytes<10?2:1)} ${u[i]}`;
   }
-  function naturalCompare(a,b){
-    return a.localeCompare(b, undefined, { numeric:true, sensitivity:"base" });
-  }
+  function naturalCompare(a,b){ return a.localeCompare(b, undefined, { numeric:true, sensitivity:"base" }); }
 
   function render(list){
     const grid = document.querySelector(".grid");
@@ -52,16 +47,13 @@
 
     let items = list.slice();
     if(q) items = items.filter(it => it.name.toLowerCase().includes(q));
-    if(sort === "az") items.sort((a,b)=>naturalCompare(a.name,b.name));
-    if(sort === "za") items.sort((a,b)=>naturalCompare(b.name,a.name));
-    if(sort === "small") items.sort((a,b)=>a.size-b.size);
-    if(sort === "big") items.sort((a,b)=>b.size-a.size);
+    if(sort==="az")   items.sort((a,b)=>naturalCompare(a.name,b.name));
+    if(sort==="za")   items.sort((a,b)=>naturalCompare(b.name,a.name));
+    if(sort==="small")items.sort((a,b)=>a.size-b.size);
+    if(sort==="big")  items.sort((a,b)=>b.size-a.size);
 
     grid.innerHTML = "";
-    if(!items.length){
-      grid.innerHTML = `<div class="empty">Sem resultados. Confirma que as imagens estão em <code>/imagens</code> ou <code>/images</code>.</div>`;
-      return;
-    }
+    if(!items.length){ grid.innerHTML = `<div class="empty">Sem resultados. Confirma que há ficheiros em <code>/imagens</code> ou <code>/images</code> nas branches <code>main</code> ou <code>master</code>.</div>`; return; }
 
     for(const it of items){
       const card = document.createElement("a");
@@ -77,15 +69,25 @@
         </div>`;
       grid.appendChild(card);
     }
+    document.querySelector("#count")?.textContent = `${items.length} ficheiro(s)`;
+  }
 
-    const counter = document.querySelector("#count");
-    if (counter) counter.textContent = `${items.length} ficheiro(s)`;
+  function showBadge(branch, dir){
+    const wrap = document.querySelector("header .wrap");
+    if (!wrap) return;
+    const b = document.createElement("span");
+    b.className = "badge";
+    b.style.marginLeft = "8px";
+    b.textContent = branch && dir ? `Fonte: ${branch} / ${dir}` : "Fonte: não encontrada";
+    wrap.querySelector("h1")?.appendChild(b);
   }
 
   let CACHE = [];
   async function init(){
     try{
-      CACHE = await fetchAll();
+      const { files, branch, dir } = await discover();
+      showBadge(branch, dir);
+      CACHE = files;
       render(CACHE);
     }catch(err){
       console.error(err);
@@ -94,10 +96,8 @@
   }
 
   window.addEventListener("DOMContentLoaded", ()=>{
-    const q = document.querySelector("#q");
-    const s = document.querySelector("#sort");
-    q && q.addEventListener("input", ()=>render(CACHE));
-    s && s.addEventListener("change", ()=>render(CACHE));
+    document.querySelector("#q")?.addEventListener("input", ()=>render(CACHE));
+    document.querySelector("#sort")?.addEventListener("change", ()=>render(CACHE));
     init();
   });
 </script>
