@@ -1,42 +1,62 @@
 <!doctype html>
 <html lang="pt">
-<meta charset="utf-8">
-<title>Teste lista</title>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Galeria — angies-dream-2025-images</title>
+
+  <style>
+    :root{--maxw:1200px}
+    *{box-sizing:border-box}
+    body{font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Inter,Arial,sans-serif;margin:0;color:#111}
+    header{position:sticky;top:0;background:#fff;border-bottom:1px solid #eee;z-index:10}
+    .wrap{max-width:var(--maxw);margin:0 auto;padding:16px}
+    h1{font-size:20px;margin:0 0 8px}
+    .sub{color:#666;font-size:14px}
+    .controls{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+    input[type="search"],select{padding:10px;border:1px solid #ddd;border-radius:10px;min-width:160px}
+    main{max-width:var(--maxw);margin:0 auto;padding:16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+    .card{border:1px solid #eee;border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+    .thumb{width:100%;aspect-ratio:4/5;object-fit:cover;background:#f6f6f6}
+    .meta{padding:8px 10px;display:flex;justify-content:space-between;font-size:12px}
+    .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%}
+    .empty{padding:48px;text-align:center;color:#777}
+    .badge{font-size:12px;margin-left:8px;background:#eee;padding:2px 8px;border-radius:12px}
+  </style>
+</head>
+
 <body>
-  <h1>Lista crua de imagens</h1>
-  <pre id="out">A carregar…</pre>
+<header>
+  <div class="wrap">
+    <h1>Galeria — angies-dream-2025-images <span id="badge" class="badge">a iniciar…</span></h1>
+    <div class="sub">Carrega imagens automaticamente da tua pasta `/imagens` ou `/images`</div>
+    <div class="controls">
+      <input id="q" type="search" placeholder="Pesquisar imagens…" />
+      <select id="sort">
+        <option value="az">A → Z</option>
+        <option value="za">Z → A</option>
+        <option value="small">Menor</option>
+        <option value="big">Maior</option>
+      </select>
+      <span id="count" class="badge">0</span>
+    </div>
+  </div>
+</header>
 
-  <script>
-    // Detecta automaticamente branch e diretório e mostra download_url
-    const owner = "ciprianateixeirasilva-hue";
-    const repo  = "angies-dream-2025-images";
-    const branches = ["main","master"];
-    const dirs = ["imagens","images"];
+<main><div class="grid"></div></main>
 
-    async function probe(branch, dir){
-      const url = `https://api.github.com/repos/${owner}/${repo}/contents/${dir}?ref=${branch}`;
-      const res = await fetch(url, { headers: { 'Accept': 'application/vnd.github+json' }});
-      if(!res.ok) return null;
-      const data = await res.json();
-      const files = (data||[]).filter(x => x.type==="file" && x.download_url);
-      return {branch, dir, files};
-    }
+<script>
+const CFG = {
+  owner:  "ciprianateixeirasilva-hue",
+  repo:   "angies-dream-2025-images",
+  branches: ["main","master"],
+  dirs:     ["imagens","images"] // suporta ambas
+};
 
-    (async ()=>{
-      const out = document.getElementById("out");
-      for (const b of branches){
-        for (const d of dirs){
-          const hit = await probe(b,d);
-          if (hit && hit.files.length){
-            out.textContent =
-              `Fonte: ${b} / ${d}\n` +
-              hit.files.map(f => `- ${f.name}\n  ${f.download_url}`).join("\n");
-            return;
-          }
-        }
-      }
-      out.textContent = "Não encontrei imagens. Verifica branch (main/master) e pasta (imagens/images).";
-    })();
-  </script>
-</body>
-</html>
+function api(branch, dir){
+  return `https://api.github.com/repos/${CFG.owner}/${CFG.repo}/contents/${dir}?ref=${branch}`;
+}
+
+async function probe(branch, dir){
+  const res = aw
