@@ -1,9 +1,42 @@
 <!doctype html>
 <html lang="pt">
 <meta charset="utf-8">
-<title>Teste Pages</title>
+<title>Teste lista</title>
 <body>
-  <h1>Olá do GitHub Pages ✅</h1>
-  <p>Se estás a ver isto, o Pages está a funcionar. O problema era o script anterior.</p>
+  <h1>Lista crua de imagens</h1>
+  <pre id="out">A carregar…</pre>
+
+  <script>
+    // Detecta automaticamente branch e diretório e mostra download_url
+    const owner = "ciprianateixeirasilva-hue";
+    const repo  = "angies-dream-2025-images";
+    const branches = ["main","master"];
+    const dirs = ["imagens","images"];
+
+    async function probe(branch, dir){
+      const url = `https://api.github.com/repos/${owner}/${repo}/contents/${dir}?ref=${branch}`;
+      const res = await fetch(url, { headers: { 'Accept': 'application/vnd.github+json' }});
+      if(!res.ok) return null;
+      const data = await res.json();
+      const files = (data||[]).filter(x => x.type==="file" && x.download_url);
+      return {branch, dir, files};
+    }
+
+    (async ()=>{
+      const out = document.getElementById("out");
+      for (const b of branches){
+        for (const d of dirs){
+          const hit = await probe(b,d);
+          if (hit && hit.files.length){
+            out.textContent =
+              `Fonte: ${b} / ${d}\n` +
+              hit.files.map(f => `- ${f.name}\n  ${f.download_url}`).join("\n");
+            return;
+          }
+        }
+      }
+      out.textContent = "Não encontrei imagens. Verifica branch (main/master) e pasta (imagens/images).";
+    })();
+  </script>
 </body>
 </html>
