@@ -29,10 +29,12 @@
 
   <script>
     const CONFIG = {
-      repoOwner: "ciprianateixeirasilva-hue",
-      repoName:  "angies-dream-2025-images",
-      branch:    "main",
-      imagesDir: "images"
+  repoOwner: "ciprianateixeirasilva-hue",
+  repoName:  "angies-dream-2025-images",
+  branch:    "main",
+  imagesDir: "imagens"
+};
+
     };
 
     const API_BASE = `https://api.github.com/repos/${CONFIG.repoOwner}/${CONFIG.repoName}/contents/${CONFIG.imagesDir}?ref=${CONFIG.branch}`;
