@@ -1,50 +1,10 @@
-name: Auto Descrição 24x7
-
-on:
-  schedule:
-    - cron: "*/30 * * * *"  # corre a cada 30 minutos
-  workflow_dispatch:
-
-permissions:
-  contents: write  # permite commitar no próprio repo
-
-jobs:
-  run:
-    runs-on: ubuntu-latest
-    env:
-      REPO: ${{ github.repository }}
-      BRANCH: main
-      IMAGES_DIR: images
-      OUTPUTS_DIR: outputs
-      STATE_DIR: .state
-      STATE_FILE: .state/processed.json
-      MIN_GAP_MINUTES: "190"
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.BRANCH }}
-          persist-credentials: true
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install openai==1.51.0 requests==2.32.3
-
       - name: Create worker script
         shell: bash
         run: |
+          set -Eeuo pipefail
           mkdir -p "$STATE_DIR" "$OUTPUTS_DIR"
-          # IMPORTANTE: o marcador 'PY' abre e fecha com a MESMA indentação e sem espaços extra
-          cat > worker.py <<'PY'
+          # Usamos 'tee' + heredoc com marcador literal para evitar problemas de YAML
+          tee worker.py > /dev/null <<'PY'
 import os, json, datetime, glob
 from pathlib import Path
 import requests
@@ -62,10 +22,10 @@ MIN_GAP     = int(os.environ.get("MIN_GAP_MINUTES", "190"))
 def now_utc():
     return datetime.datetime.utcnow()
 
-def iso(dt): 
+def iso(dt):
     return dt.strftime("%Y-%m-%d_%H-%M")
 
-def iso_full(dt): 
+def iso_full(dt):
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 # --- Estado ---
@@ -130,7 +90,6 @@ ESTRUTURA_14 = f"""{PONTO1_TEXTO_EXATO}
 13. Animal/Ave/Réptil/Peixe/Ser (se existir): Espécie, coloração/padrões, textura, características anatómicas, tamanho/proporção, linguagem corporal, condição, posição/movimento, elementos únicos.
 14. Prompt (Midjourney): Em inglês, único e coerente com todos os pontos; incluir termos fotográficos profissionais (hyper-realistic, 8k, ultra detailed, DOF, cinematic lighting, etc.) e parâmetros finais: --ar [2:3/16:9], --quality 2, --s 750, --style raw, --v 5.2.
 """
-
 def build_messages(img_url, filename):
     system = ("És um assistente de direção de arte e moda. "
               "Responde sempre em português de Portugal, técnico e fiel, "
@@ -185,18 +144,3 @@ state["last_cycle_finished_at"] = iso_full(now_utc())
 with open(STATE_FILE, "w", encoding="utf-8") as f:
     json.dump(state, f, ensure_ascii=False, indent=2)
 PY
-
-      - name: Run worker
-        run: python worker.py
-
-      - name: Commit & Push outputs/state
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$OUTPUTS_DIR" || true
-          git add "$STATE_DIR" || true
-          if git diff --cached --quiet; then
-            echo "Nada para commitar."
-          else:
-            git commit -m "Auto: descrições + estado ($(date -u +'%Y-%m-%d %H:%M UTC'))"
-            git push origin "$BRANCH"
