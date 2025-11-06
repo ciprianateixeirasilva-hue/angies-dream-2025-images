@@ -40,9 +40,10 @@ jobs:
           pip install "openai==1.51.0" "requests==2.32.3"
 
       - name: Create worker script
+        shell: bash
         run: |
           mkdir -p "$STATE_DIR" "$OUTPUTS_DIR"
-          cat > worker.PY <<'PY'
+          cat > worker.py <<'PY'
           import os, json, datetime, glob
           from pathlib import Path
           import requests
