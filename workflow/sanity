@@ -1,4 +1,0 @@
-on:
-  schedule:
-    - cron: "*/30 * * * *"   # se quiseres a cada 30 min
-  workflow_dispatch:
