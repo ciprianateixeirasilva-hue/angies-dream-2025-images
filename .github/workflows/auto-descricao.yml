@@ -1,0 +1,140 @@
+name: Auto-Descricao-13-Pontos
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # Executa a cada 30 minutos
+  workflow_dispatch:
+
+jobs:
+  process-images:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install requests pyyaml
+
+      - name: Run processing script
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python3 << 'EOF'
+          import os, requests, json, base64, datetime
+
+          REPO = "ciprianateixeirasilva-hue/angies-dream-2025-images"
+          BRANCH = "main"
+          IMAGES_DIR = "images"
+          OUTPUT_DIR = "outputs"
+
+          # Autenticação GitHub
+          GH_HEADERS = {
+              "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+              "Accept": "application/vnd.github+json"
+          }
+
+          # Função: Ler diretório /images
+          def list_images():
+              url = f"https://api.github.com/repos/{REPO}/contents/{IMAGES_DIR}?ref={BRANCH}"
+              r = requests.get(url, headers=GH_HEADERS)
+              if r.status_code != 200:
+                  print("Erro ao listar imagens:", r.text)
+                  return []
+              return [f["name"] for f in r.json() if f["type"] == "file"]
+
+          # Carregar estado persistente
+          STATE_FILE = "processed.json"
+          if os.path.exists(STATE_FILE):
+              processed = json.load(open(STATE_FILE))
+          else:
+              processed = { "files": [], "last_cycle": "2000-01-01 00:00" }
+
+          # Verificar tempo desde último ciclo
+          last = datetime.datetime.strptime(processed["last_cycle"], "%Y-%m-%d %H:%M")
+          diff_minutes = (datetime.datetime.utcnow() - last).total_seconds() / 60
+
+          images = list_images()
+          new_files = [f for f in images if f not in processed["files"]]
+
+          print("Novos ficheiros encontrados:", new_files)
+
+          if diff_minutes < 190 or len(new_files) == 0:
+              print("Condições não cumpridas, saindo.")
+              exit(0)
+
+          # Gerar descrições para cada imagem
+          all_output = ""
+          for filename in new_files:
+              file_url = f"https://raw.githubusercontent.com/{REPO}/{BRANCH}/{IMAGES_DIR}/{filename}"
+
+              # Prompt do ponto 1 + 13 pontos (resumido apenas para estrutura funcional)
+              prompt = f"""
+Inclui no topo o nome do ficheiro: {filename}
+
+1. Usando a minha imagem, Recrie essa mesma imagem, porém melhorando a sua qualidade, trazendo para uma câmera profissional 8k HD resolution, hiper-realistic, melhorando apenas a qualidade da imagem. Retire esse excesso de granulação e deixe mais nítida, como uma cena de filme, sem alterar minhas características físicas, idade, gênero, sem distorções rosto ou corpo, sem pele plástica, o corpo da mulher é size médium, busto 100 taça C.
+
+2–13: Segue exatamente toda a estrutura completa definida pela Cipriana para o workflow de descrição.
+"""
+
+              # Chamada à API da OpenAI
+              response = requests.post(
+                  "https://api.openai.com/v1/chat/completions",
+                  headers={
+                      "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}",
+                      "Content-Type": "application/json"
+                  },
+                  json={
+                      "model": "gpt-5",
+                      "messages": [
+                          {
+                              "role": "user",
+                              "content": prompt
+                          }
+                      ]
+                  }
+              )
+
+              result = response.json()["choices"][0]["message"]["content"]
+
+              all_output += f"\n\n=== {filename} ===\n{result}\n"
+
+              processed["files"].append(filename)
+
+          # Criar output file
+          ts = datetime.datetime.utcnow().strftime("%Y-%m-%d_%H-%M")
+          output_filename = f"output-descricoes-{ts}.txt"
+
+          # Criar pasta /outputs se necessário
+          requests.put(
+              f"https://api.github.com/repos/{REPO}/contents/{OUTPUT_DIR}/.keep",
+              headers=GH_HEADERS,
+              json={
+                  "message": "create outputs folder",
+                  "content": base64.b64encode("keep".encode()).decode(),
+                  "branch": BRANCH
+              }
+          )
+
+          # Commit do ficheiro final
+          requests.put(
+              f"https://api.github.com/repos/{REPO}/contents/{OUTPUT_DIR}/{output_filename}",
+              headers=GH_HEADERS,
+              json={
+                  "message": f"Output {ts}",
+                  "content": base64.b64encode(all_output.encode()).decode(),
+                  "branch": BRANCH
+              }
+          )
+
+          processed["last_cycle"] = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+          json.dump(processed, open(STATE_FILE, "w"))
+
+          EOF
