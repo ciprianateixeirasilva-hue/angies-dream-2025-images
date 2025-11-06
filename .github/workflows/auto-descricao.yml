@@ -1,4 +1,4 @@
-      - name: Create worker script
+            - name: Create worker script
         shell: bash
         run: |
           set -Eeuo pipefail
