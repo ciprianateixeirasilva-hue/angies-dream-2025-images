@@ -1,0 +1,180 @@
+name: Auto-Descricao-24x7
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      REPO: ${{ github.repository }}
+      BRANCH: main
+      IMAGES_DIR: images
+      OUTPUTS_DIR: outputs
+      STATE_DIR: .state
+      STATE_FILE: .state/processed.json
+      MIN_GAP_MINUTES: "190"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          persist-credentials: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install openai==1.51.0 requests==2.32.3
+
+      - name: Create worker script
+        shell: bash
+        run: |
+          mkdir -p "$STATE_DIR" "$OUTPUTS_DIR"
+          cat > worker.py <<'PY'
+import os, json, datetime, glob
+from pathlib import Path
+import requests
+from openai import OpenAI
+
+# ---- helpers ----
+def now_utc():
+    return datetime.datetime.utcnow()
+
+def iso(dt):
+    return dt.strftime("%Y-%m-%d_%H-%M")
+
+def iso_full(dt):
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+# ---- env ----
+REPO        = os.environ["REPO"]
+BRANCH      = os.environ.get("BRANCH", "main")
+IMAGES_DIR  = os.environ.get("IMAGES_DIR", "images")
+OUTPUTS_DIR = os.environ.get("OUTPUTS_DIR", "outputs")
+STATE_DIR   = os.environ.get("STATE_DIR", ".state")
+STATE_FILE  = os.environ.get("STATE_FILE", ".state/processed.json")
+MIN_GAP     = int(os.environ.get("MIN_GAP_MINUTES", "190"))
+
+# ---- state ----
+Path(STATE_DIR).mkdir(parents=True, exist_ok=True)
+if os.path.exists(STATE_FILE):
+    with open(STATE_FILE, "r", encoding="utf-8") as f:
+        state = json.load(f)
+else:
+    state = {"processed": [], "last_cycle_finished_at": None}
+
+processed = set(state.get("processed", []))
+last_done = state.get("last_cycle_finished_at")
+
+# respect 190-minute gap
+if last_done:
+    # accept both "...Z" and without Z
+    s = last_done.replace("Z", "")
+    try:
+        last_dt = datetime.datetime.fromisoformat(s)
+    except Exception:
+        last_dt = datetime.datetime.strptime(last_done, "%Y-%m-%dT%H:%M:%SZ")
+    delta_min = (now_utc() - last_dt).total_seconds() / 60.0
+    if delta_min < MIN_GAP:
+        print(f"Skip: only {delta_min:.1f} minutes since last cycle (<{MIN_GAP}).")
+        raise SystemExit(0)
+
+# gather images (FIFO by name)
+imgs = sorted([p for p in glob.glob(f"{IMAGES_DIR}/*") if os.path.isfile(p)])
+unprocessed = [os.path.basename(p) for p in imgs if os.path.basename(p) not in processed]
+
+if not unprocessed:
+    print("No new images to process.")
+    raise SystemExit(0)
+
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+ts = iso(now_utc())
+out_path = Path(OUTPUTS_DIR) / f"output-descricoes-{ts}.txt"
+Path(OUTPUTS_DIR).mkdir(parents=True, exist_ok=True)
+
+# --- ponto 1 EXACTO (14 pontos) ---
+PONTO1 = (
+    "1. Usando a minha imagem, Recrie essa mesma imagem, porém melhorando a sua qualidade, "
+    "trazendo para uma câmera profissional 8k HD resolution, hiper-realistic, melhorando apenas a qualidade da imagem. "
+    "Retire esse excesso de granulação e deixe mais nítida, como uma cena de filme, sem alterar minhas características físicas, "
+    "idade, gênero, sem distorções rosto ou corpo, sem pele plástica, o corpo da mulher é size médium, busto 100 taça C."
+)
+
+ESTRUTURA_14 = (
+    PONTO1 + "\n"
+    "2. Cabelo: Descreva tecnicamente o cabelo da pessoa na imagem, detalhando: Cor Base e Reflexos: (ex: Castanho escuro com reflexos acobreados, Loiro platinado com raiz natural aparente), Comprimento: (ex: Curto na altura do queixo, Médio até os ombros, Longo até a cintura), Tipo de Corte: (ex: Bob assimétrico, Camadas longas, Pixie, Reto), Textura Natural: (ex: Liso escorrido, Ondulado suave, Cacheado definido, Crespo volumoso, com volume, brilho natural), Penteado Atual: (ex: Solto e natural, Coque alto despojado, Rabo de cavalo elegante, Trança espinha de peixe lateral, puxado para trás), Volume: (ex: Alto volume na raiz, Pouco volume, Volume concentrado nas pontas), Brilho: (ex: Alto brilho, Brilho discreto, Acabamento matte), Repartição: (ex: Linha reta ao meio, Linha lateral profunda, Sem repartição visível), Franja/Grades (se houver): (ex: Franja reta, Franja cortina, Grades laterais), Condição Visível: (ex: Fios saudáveis e sedosos, Aparência seca, Pontas duplas perceptíveis). Acessórios: (ex: Tiara, Grampos decorados, Faixa de cabelo, chapéu, boina, lenço, tule, boné, gorro).\n"
+    "3. Corpo e Pose: Descreve a postura e o posicionamento corporal com elegância: Postura Corporal: (ex: ereta, curvada, relaxada, tensa), Orientação do Tronco: (ex: levemente inclinado para frente/trás/lados, torcido), Posição da Cabeça: (ex: ligeiramente inclinada, reta, voltada para a câmera/lado, queixo elevado/abaixado), Ombros: (ex: relaxados, tensos, elevados, retraídos), Braços: (ex: relaxados ao lado do corpo, cruzados, dobrados, estendidos - e a posição dos cotovelos), Mãos: (ex: nos bolsos, apoiadas na cintura, gestuais, abertas, fechadas - e a posição dos dedos), Pernas: (ex: juntas, afastadas, cruzadas, uma à frente da outra - e a posição dos joelhos), Pés: (ex: paralelos, um à frente, ponta dos pés, peso em um pé), Linhas de Movimento: ...\n"
+    "4. Roupas: Descreva tecnicamente as roupas ... (todo o texto da tua lista, intacto)...\n"
+    "5. Calçado: Descreva tecnicamente o calçado ...\n"
+    "6. Acessórios: ...\n"
+    "7. Ambiente e Fundo: ...\n"
+    "8. Coloração Realista: ...\n"
+    "9. Estilo e Intenção Visual: ...\n"
+    "10. Tipos de fotografia: ...\n"
+    "11. Tipos de ângulos: ...\n"
+    "12. Tatuagens: ...\n"
+    "13. Animal/Ave/Réptil/Peixe/Ser: ...\n"
+    "14. Prompt: ...\n"
+)
+
+raw_base = f"https://raw.githubusercontent.com/{REPO}/{BRANCH}/{IMAGES_DIR}"
+results = []
+
+for fname in unprocessed:
+    img_url = f"{raw_base}/{requests.utils.quote(fname)}"
+
+    # mensagens para a API
+    messages = [
+        {"role":"system","content":"És um assistente de direção de arte e moda. Responde em PT-pt, técnico, fiel, estrutura enumerada sem simplificações."},
+        {"role":"user","content":f"FILENAME: {fname}\nAnalisa a imagem no URL e produz os 14 pontos, mantendo o ponto 1 EXACTO no topo.\nURL: {img_url}\n{ESTRUTURA_14}"}
+    ]
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.3,
+            messages=messages
+        )
+        text = resp.choices[0].message.content.strip()
+    except Exception as e:
+        text = f"[ERRO ao gerar descrição para {fname}: {e}]"
+
+    results.append(f"{fname}\n{text}\n")
+    processed.add(fname)
+
+# escrever output
+with open(out_path, "w", encoding="utf-8") as f:
+    f.write("\n".join(results).strip() + "\n")
+print(f"Escrito: {out_path} ({len(results)} itens)")
+
+# atualizar estado
+state["processed"] = sorted(processed)
+state["last_cycle_finished_at"] = iso_full(now_utc())
+with open(STATE_FILE, "w", encoding="utf-8") as f:
+    json.dump(state, f, indent=2, ensure_ascii=False)
+PY
+
+      - name: Run worker
+        run: python worker.py
+
+      - name: Commit and Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$OUTPUTS_DIR" "$STATE_DIR" || true
+          git commit -m "Auto: descricoes e estado" || echo "Nothing to commit"
+          git push
