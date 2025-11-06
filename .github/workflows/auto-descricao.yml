@@ -22,6 +22,8 @@ MIN_GAP     = int(os.environ.get("MIN_GAP_MINUTES", "190"))
 def now_utc():
     return datetime.datetime.utcnow()
 
+    return datetime.datetime.utcnow()
+
 def iso(dt):
     return dt.strftime("%Y-%m-%d_%H-%M")
 
