@@ -180,7 +180,7 @@ jobs:
           state["last_cycle_finished_at"] = iso_full(now_utc())
           with open(STATE_FILE, "w", encoding="utf-8") as f:
               json.dump(state, f, ensure_ascii=False, indent=2)
-          PY
+PY
 
       - name: Run worker
         run: python worker.py
