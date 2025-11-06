@@ -42,7 +42,7 @@ jobs:
       - name: Create worker script
         run: |
           mkdir -p "$STATE_DIR" "$OUTPUTS_DIR"
-          cat > worker.py <<'PY'
+          cat > worker.PY <<'PY'
           import os, json, datetime, glob
           from pathlib import Path
           import requests
@@ -181,8 +181,9 @@ jobs:
           with open(STATE_FILE, "w", encoding="utf-8") as f:
               json.dump(state, f, ensure_ascii=False, indent=2)
 PY
+
       - name: Run worker
-        run: python worker.py
+        run: python worker.PY
 
       - name: Commit & Push outputs/state
         run: |
