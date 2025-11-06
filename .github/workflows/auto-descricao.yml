@@ -1,10 +1,10 @@
-            - name: Create worker script
+        - name: Create worker script
         shell: bash
         run: |
           set -Eeuo pipefail
           mkdir -p "$STATE_DIR" "$OUTPUTS_DIR"
-          # Usamos 'tee' + heredoc com marcador literal para evitar problemas de YAML
           tee worker.py > /dev/null <<'PY'
+# -*- coding: utf-8 -*-
 import os, json, datetime, glob
 from pathlib import Path
 import requests
@@ -75,21 +75,23 @@ PONTO1_TEXTO_EXATO = (
     "idade, gênero, sem distorções rosto ou corpo, sem pele plástica, o corpo da mulher é size médium, busto 100 taça C."
 )
 
-ESTRUTURA_14 = f"""{PONTO1_TEXTO_EXATO}
-2. Cabelo: Descreva tecnicamente o cabelo da pessoa na imagem, detalhando: Cor Base e Reflexos: (ex: Castanho escuro com reflexos acobreados, Loiro platinado com raiz natural aparente), Comprimento: (ex: Curto na altura do queixo, Médio até os ombros, Longo até a cintura), Tipo de Corte: (ex: Bob assimétrico, Camadas longas, Pixie, Reto), Textura Natural: (ex: Liso escorrido, Ondulado suave, Cacheado definido, Crespo volumoso, com volume, brilho natural), Penteado Atual: (ex: Solto e natural, Coque alto despojado, Rabo de cavalo elegante, Trança espinha de peixe lateral, puxado para trás), Volume: (ex: Alto volume na raiz, Pouco volume, Volume concentrado nas pontas), Brilho: (ex: Alto brilho, Brilho discreto, Acabamento matte), Repartição: (ex: Linha reta ao meio, Linha lateral profunda, Sem repartição visível), Franja/Grades (se houver): (ex: Franja reta, Franja cortina, Grades laterais), Condição Visível: (ex: Fios saudáveis e sedosos, Aparência seca, Pontas duplas perceptíveis). Acessórios: (ex: Tiara, Grampos decorados, Faixa de cabelo, chapéu, boina, lenço, tule, boné, gorro).
-3. Corpo e Pose: Descreve a postura e o posicionamento corporal com elegância: Postura Corporal: (ex: ereta, curvada, relaxada, tensa), Orientação do Tronco: (ex: levemente inclinado para frente/trás/lados, torcido), Posição da Cabeça: (ex: ligeiramente inclinada, reta, voltada para a câmera/lado, queixo elevado/abaixado), Ombros: (ex: relaxados, tensos, elevados, retraídos), Braços: (ex: relaxados ao lado do corpo, cruzados, dobrados, estendidos - e a posição dos cotovelos), Mãos: (ex: nos bolsos, apoiadas na cintura, gestuais, abertas, fechadas - e a posição dos dedos), Pernas: (ex: juntas, afastadas, cruzadas, uma à frente da outra - e a posição dos joelhos), Pés: (ex: paralelos, um à frente, ponta dos pés, peso em um pé), Linhas de Movimento: Descreva as principais linhas criadas pela pose que sugerem movimento ou estática. Evita interpretações emocionais excessivas: mantém um tom profissional e visual.
-4. Roupas: Descreva tecnicamente as roupas da pessoa na imagem, detalhando: Peça Superior: (ex: Blusa de seda com decote V, Camisa de algodão Oxford, Suéter de lã merino), Cor/Padrão: (ex: Vermelho vivo, Listras finas, Xadrez tartan), Material/Tecido: (ex: Viscose, Linho, Couro, Denim, látex, vinil, rendas, lantejoulas, cetim, seda, veludo, renda, algodão), Corte/Caimento: (ex: Slim fit, Oversized, Cropped, Godê), Detalhes: (ex: sem mangas, com mangas compridas, gola alta, decote em V, tomara-que-caia, cintura marcada, com fenda, estruturado, fluido, mangas bufantes, gola padre, babados, bordados, transparentes, translúcidos), Peça Inferior: (ex: Calça jeans skinny, Saia midi plissada, mini saia, calção, Bermuda de alfaiataria), Cor/Padrão: (ex: Azul índigo, Floral abstrato, Preto liso), Material/Tecido: (ex: lantejoulas, cetim, seda, veludo, renda, vinil, couro, algodão, jeans, crepe, veludo, lã), Corte/Caimento: (ex: Reta, Evasê, Cenoura, Flare), Detalhes: (ex: Cinto embutido, Bolsos cargo, Fenda lateral), Peça Única: (ex: Vestido longo de festa, Macacão utilitário), Peças de Terceira Camada: (ex: Blazer estruturado, Jaqueta de couro, Sobretudo), Coerência/Contraste: Como as peças se harmonizam ou contrastam. Atenção a logótipos/padrões de grife.
-5. Calçado: Tipo, estrutura, material, cor, bico, salto (forma/altura), sola, fechos, detalhes e eventuais marcas visíveis.
-6. Acessórios: Tipo e posicionamento (joias, óculos, cinto, mala, chapéu, etc.), material, cor, estilo/design, detalhes, tamanho/proporção. Atenção a marcas visíveis.
-7. Ambiente e Fundo: Tipo de cenário (interior/exterior), elementos arquitetónicos/naturais, objetos, paleta cromática, iluminação (fonte/qualidade/direção), texturas, profundidade de campo, distância ao fundo, elementos atmosféricos, sensação espacial.
-8. Coloração Realista: Respeitar tons originais de pele, cabelo, roupa e cenário; equilíbrio luz/sombra fiel.
-9. Estilo e Intenção Visual: Classificação do tom (editorial de moda de luxo, retrato artístico, campanha publicitária, cinematográfico, etc.).
-10. Tipo de Plano: Classificar (close-up, plano médio, plano americano, corpo inteiro).
-11. Ângulo de Câmara: Normal, plongée, contra-plongée, etc.
-12. Tatuagens/Elementos Especiais (se existirem): Localização precisa, dimensões, estilo, tema, paleta, linework, sombreado, destaques/condição.
-13. Animal/Ave/Réptil/Peixe/Ser (se existir): Espécie, coloração/padrões, textura, características anatómicas, tamanho/proporção, linguagem corporal, condição, posição/movimento, elementos únicos.
-14. Prompt (Midjourney): Em inglês, único e coerente com todos os pontos; incluir termos fotográficos profissionais (hyper-realistic, 8k, ultra detailed, DOF, cinematic lighting, etc.) e parâmetros finais: --ar [2:3/16:9], --quality 2, --s 750, --style raw, --v 5.2.
-"""
+ESTRUTURA_14 = (
+    f"{PONTO1_TEXTO_EXATO}\n"
+    "2. Cabelo: Descreva tecnicamente o cabelo da pessoa na imagem, detalhando: Cor Base e Reflexos: (ex: Castanho escuro com reflexos acobreados, Loiro platinado com raiz natural aparente), Comprimento: (ex: Curto na altura do queixo, Médio até os ombros, Longo até a cintura), Tipo de Corte: (ex: Bob assimétrico, Camadas longas, Pixie, Reto), Textura Natural: (ex: Liso escorrido, Ondulado suave, Cacheado definido, Crespo volumoso, com volume, brilho natural), Penteado Atual: (ex: Solto e natural, Coque alto despojado, Rabo de cavalo elegante, Trança espinha de peixe lateral, puxado para trás), Volume: (ex: Alto volume na raiz, Pouco volume, Volume concentrado nas pontas), Brilho: (ex: Alto brilho, Brilho discreto, Acabamento matte), Repartição: (ex: Linha reta ao meio, Linha lateral profunda, Sem repartição visível), Franja/Grades (se houver): (ex: Franja reta, Franja cortina, Grades laterais), Condição Visível: (ex: Fios saudáveis e sedosos, Aparência seca, Pontas duplas perceptíveis). Acessórios: (ex: Tiara, Grampos decorados, Faixa de cabelo, chapéu, boina, lenço, tule, boné, gorro).\n"
+    "3. Corpo e Pose: Descreve a postura e o posicionamento corporal com elegância: Postura Corporal: (ex: ereta, curvada, relaxada, tensa), Orientação do Tronco: (ex: levemente inclinado para frente/trás/lados, torcido), Posição da Cabeça: (ex: ligeiramente inclinada, reta, voltada para a câmera/lado, queixo elevado/abaixado), Ombros: (ex: relaxados, tensos, elevados, retraídos), Braços: (ex: relaxados ao lado do corpo, cruzados, dobrados, estendidos - e a posição dos cotovelos), Mãos: (ex: nos bolsos, apoiadas na cintura, gestuais, abertas, fechadas - e a posição dos dedos), Pernas: (ex: juntas, afastadas, cruzadas, uma à frente da outra - e a posição dos joelhos), Pés: (ex: paralelos, um à frente, ponta dos pés, peso em um pé), Linhas de Movimento: Descreva as principais linhas criadas pela pose que sugerem movimento ou estática. Evita interpretações emocionais excessivas: mantém um tom profissional e visual.\n"
+    "4. Roupas: Descreva tecnicamente as roupas da pessoa na imagem, detalhando: Peça Superior: (ex: Blusa de seda com decote V, Camisa de algodão Oxford, Suéter de lã merino), Cor/Padrão: (ex: Vermelho vivo, Listras finas, Xadrez tartan), Material/Tecido: (ex: Viscose, Linho, Couro, Denim, látex, vinil, rendas, lantejoulas, cetim, seda, veludo, renda, algodão), Corte/Caimento: (ex: Slim fit, Oversized, Cropped, Godê), Detalhes: (ex: sem mangas, com mangas compridas, gola alta, decote em V, tomara-que-caia, cintura marcada, com fenda, estruturado, fluido, mangas bufantes, gola padre, babados, bordados, transparentes, translúcidos), Peça Inferior: (ex: Calça jeans skinny, Saia midi plissada, mini saia, calção, Bermuda de alfaiataria), Cor/Padrão: (ex: Azul índigo, Floral abstrato, Preto liso), Material/Tecido: (ex: lantejoulas, cetim, seda, veludo, renda, vinil, couro, algodão, jeans, crepe, veludo, lã), Corte/Caimento: (ex: Reta, Evasê, Cenoura, Flare), Detalhes: (ex: Cinto embutido, Bolsos cargo, Fenda lateral), Peça Única: (ex: Vestido longo de festa, Macacão utilitário), Peças de Terceira Camada: (ex: Blazer estruturado, Jaqueta de couro, Sobretudo), Coerência/Contraste: Como as peças se harmonizam ou contrastam. Atenção a logótipos/padrões de grife.\n"
+    "5. Calçado: Tipo, estrutura, material, cor, bico, salto (forma/altura), sola, fechos, detalhes e eventuais marcas visíveis.\n"
+    "6. Acessórios: Tipo e posicionamento (joias, óculos, cinto, mala, chapéu, etc.), material, cor, estilo/design, detalhes, tamanho/proporção. Atenção a marcas visíveis.\n"
+    "7. Ambiente e Fundo: Tipo de cenário (interior/exterior), elementos arquitetónicos/naturais, objetos, paleta cromática, iluminação (fonte/qualidade/direção), texturas, profundidade de campo, distância ao fundo, elementos atmosféricos, sensação espacial.\n"
+    "8. Coloração Realista: Respeitar tons originais de pele, cabelo, roupa e cenário; equilíbrio luz/sombra fiel.\n"
+    "9. Estilo e Intenção Visual: Classificação do tom (editorial de moda de luxo, retrato artístico, campanha publicitária, cinematográfico, etc.).\n"
+    "10. Tipo de Plano: Classificar (close-up, plano médio, plano americano, corpo inteiro).\n"
+    "11. Ângulo de Câmara: Normal, plongée, contra-plongée, etc.\n"
+    "12. Tatuagens/Elementos Especiais (se existirem): Localização precisa, dimensões, estilo, tema, paleta, linework, sombreado, destaques/condição.\n"
+    "13. Animal/Ave/Réptil/Peixe/Ser (se existir): Espécie, coloração/padrões, textura, características anatómicas, tamanho/proporção, linguagem corporal, condição, posição/movimento, elementos únicos.\n"
+    "14. Prompt (Midjourney): Em inglês, único e coerente com todos os pontos; incluir termos fotográficos profissionais (hyper-realistic, 8k, ultra detailed, DOF, cinematic lighting, etc.) e parâmetros finais: --ar [2:3/16:9], --quality 2, --s 750, --style raw, --v 5.2.\n"
+)
+
 def build_messages(img_url, filename):
     system = ("És um assistente de direção de arte e moda. "
               "Responde sempre em português de Portugal, técnico e fiel, "
@@ -114,7 +116,6 @@ processed_now = []
 for fname in unprocessed:
     img_url = f"{raw_base}/{requests.utils.quote(fname)}"
     system, user = build_messages(img_url, fname)
-
     try:
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -144,3 +145,4 @@ state["last_cycle_finished_at"] = iso_full(now_utc())
 with open(STATE_FILE, "w", encoding="utf-8") as f:
     json.dump(state, f, ensure_ascii=False, indent=2)
 PY
+       
