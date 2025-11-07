@@ -40,7 +40,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install openai==1.51.0 requests==2.32.3
 
-- name: Create worker script
+      - name: Create worker script
         shell: bash
         run: |
           mkdir -p "$STATE_DIR" "$OUTPUTS_DIR"
@@ -173,7 +173,6 @@ jobs:
           with open(STATE_FILE, "w", encoding="utf-8") as f:
               json.dump(state, f, ensure_ascii=False, indent=2)
 PY
-
       - name: Run worker
         run: python worker.py
 
