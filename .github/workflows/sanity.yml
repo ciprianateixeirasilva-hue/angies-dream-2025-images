@@ -39,72 +39,71 @@ jobs:
           python -m pip install --upgrade pip
           pip install "openai==1.51.0" "requests==2.32.3"
 
-      - name: Create worker script
+       - name: Create worker script
         shell: bash
         run: |
           mkdir -p "$STATE_DIR" "$OUTPUTS_DIR"
           cat > worker.py <<'PY'
-          import os, json, datetime, glob
-          from pathlib import Path
-          import requests
-          from openai import OpenAI
+import os, json, datetime, glob
+from pathlib import Path
+import requests
+from openai import OpenAI
 
-          # ---------- helpers ----------
-          def now_utc():
-              return datetime.datetime.utcnow()
+# ---- helpers ----
+def now_utc():
+    return datetime.datetime.utcnow()
 
-          def iso(dt):
-              return dt.strftime("%Y-%m-%d_%H-%M")
+def iso(dt):
+    return dt.strftime("%Y-%m-%d_%H-%M")
 
-          def iso_full(dt):
-              return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+def iso_full(dt):
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-          # ---------- env ----------
-          REPO        = os.environ["REPO"]
-          BRANCH      = os.environ.get("BRANCH", "main")
-          IMAGES_DIR  = os.environ.get("IMAGES_DIR", "images")
-          OUTPUTS_DIR = os.environ.get("OUTPUTS_DIR", "outputs")
-          STATE_DIR   = os.environ.get("STATE_DIR", ".state")
-          STATE_FILE  = os.environ.get("STATE_FILE", ".state/processed.json")
-          MIN_GAP     = int(os.environ.get("MIN_GAP_MINUTES", "190"))
+# ---- env ----
+REPO        = os.environ["REPO"]
+BRANCH      = os.environ.get("BRANCH", "main")
+IMAGES_DIR  = os.environ.get("IMAGES_DIR", "images")
+OUTPUTS_DIR = os.environ.get("OUTPUTS_DIR", "outputs")
+STATE_DIR   = os.environ.get("STATE_DIR", ".state")
+STATE_FILE  = os.environ.get("STATE_FILE", ".state/processed.json")
+MIN_GAP     = int(os.environ.get("MIN_GAP_MINUTES", "190"))
 
-          Path(STATE_DIR).mkdir(parents=True, exist_ok=True)
+# ---- state ----
+Path(STATE_DIR).mkdir(parents=True, exist_ok=True)
+if os.path.exists(STATE_FILE):
+    with open(STATE_FILE, "r", encoding="utf-8") as f:
+        state = json.load(f)
+else:
+    state = {"processed": [], "last_cycle_finished_at": None}
 
-          # ---------- state ----------
-          if os.path.exists(STATE_FILE):
-              with open(STATE_FILE, "r", encoding="utf-8") as f:
-                  state = json.load(f)
-          else:
-              state = {"processed": [], "last_cycle_finished_at": None}
+processed = set(state.get("processed", []))
+last_done = state.get("last_cycle_finished_at")
 
-          processed = set(state.get("processed", []))
-          last_done = state.get("last_cycle_finished_at")
+# respect 190 min gap
+if last_done:
+    s = last_done.replace("Z", "")
+    try:
+        last_dt = datetime.datetime.strptime(s, "%Y-%m-%dT%H:%M:%S")
+    except Exception:
+        last_dt = datetime.datetime.fromisoformat(s)
+    delta_min = (now_utc() - last_dt).total_seconds() / 60.0
+    if delta_min < MIN_GAP:
+        print(f"SKIP: only {delta_min:.1f} minutes since last cycle (<{MIN_GAP}).")
+        raise SystemExit(0)
 
-          # respect 190 min gap
-          if last_done:
-              s = last_done.replace("Z", "")
-              try:
-                  last_dt = datetime.datetime.strptime(s, "%Y-%m-%dT%H:%M:%S")
-              except Exception:
-                  last_dt = datetime.datetime.fromisoformat(s)
-              delta_min = (now_utc() - last_dt).total_seconds() / 60.0
-              if delta_min < MIN_GAP:
-                  print(f"SKIP: only {delta_min:.1f} minutes since last cycle (<{MIN_GAP}).")
-                  raise SystemExit(0)
+# list images FIFO
+imgs = sorted([p for p in glob.glob(f"{IMAGES_DIR}/*") if os.path.isfile(p)])
+unprocessed = [os.path.basename(p) for p in imgs if os.path.basename(p) not in processed]
 
-          # list images FIFO
-          imgs = sorted([p for p in glob.glob(f"{IMAGES_DIR}/*") if os.path.isfile(p)])
-          unprocessed = [os.path.basename(p) for p in imgs if os.path.basename(p) not in processed]
+if not unprocessed:
+    print("Nada novo para processar.")
+    raise SystemExit(0)
 
-          if not unprocessed:
-              print("Nothing new to process.")
-              raise SystemExit(0)
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-          client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-
-          ts = iso(now_utc())
-          out_path = Path(OUTPUTS_DIR) / f"output-descricoes-{ts}.txt"
-          Path(OUTPUTS_DIR).mkdir(parents=True, exist_ok=True)
+ts = iso(now_utc())
+out_path = Path(OUTPUTS_DIR) / f"output-descricoes-{ts}.txt"
+Path(OUTPUTS_DIR).mkdir(parents=True, exist_ok=True)
 
           # ---------- estrutura 14 pontos ----------
           PONTO1_TEXTO_EXATO = (
