@@ -1,4 +1,4 @@
-     name: Auto-Descricao-24x7
+name: Auto-Descricao-24x7
 
 on:
   schedule:
