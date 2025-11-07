@@ -2,7 +2,7 @@ name: Auto-Descricao-24x7
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "5 */3 * * *"   # de 3 em 3 horas, minuto 05
   workflow_dispatch:
 
 permissions:
