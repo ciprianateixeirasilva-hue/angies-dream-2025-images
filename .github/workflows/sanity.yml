@@ -108,18 +108,18 @@ jobs:
 
           # ---- estrutura 14 pontos (COMPLETA) ----
           PONTO1_TEXTO_EXATO = (
-              "1. Usando a minha imagem, Recrie essa mesma imagem, porém melhorando a sua qualidade, "
-              "trazendo para uma câmera profissional 8k HD resolution, hiper-realistic, melhorando apenas a qualidade da imagem. "
-              "Retire esse excesso de granulação e deixe mais nítida, como uma cena de filme, sem alterar minhas características físicas, "
+              "1. Usando a minha imagem, Recrie essa mesma imagem, porém melhorando a sua qualidade,"
+              "trazendo para uma câmera profissional 8k HD resolution, hiper-realistic, melhorando apenas a qualidade da imagem."
+              "Retire esse excesso de granulação e deixe mais nítida, como uma cena de filme, sem alterar minhas características físicas,"
               "idade, gênero, sem distorções rosto ou corpo, sem pele plástica, o corpo da mulher é size médium, busto 100 taça C."
           )
 
           ESTRUTURA_14 = f"""{PONTO1_TEXTO_EXATO}
 # ---- estrutura 15 pontos --------
 PONTO1_TEXTO_EXATO = (
-    "1. Usando a minha imagem, Recrie essa mesma imagem, porém melhorando a sua qualidade, "
-    "trazendo para uma câmera profissional 8k HD resolution, hiper-realistic, melhorando apenas a qualidade da imagem. "
-    "Retire esse excesso de granulação e deixe mais nítida, como uma cena de filme, sem alterar minhas características físicas, "
+    "1. Usando a minha imagem, Recrie essa mesma imagem, porém melhorando a sua qualidade,"
+    "trazendo para uma câmera profissional 8k HD resolution, hiper-realistic, melhorando apenas a qualidade da imagem."
+    "Retire esse excesso de granulação e deixe mais nítida, como uma cena de filme, sem alterar minhas características físicas,"
     "idade, gênero, sem distorções rosto ou corpo, sem pele plástica, o corpo da mulher é size médium, busto 100 taça C."
 )
 
@@ -143,8 +143,8 @@ ESTRUTURA_15 = f"""{PONTO1_TEXTO_EXATO}
 
           def build_messages(img_url, filename):
               system = (
-                  "És um assistente de direção de arte e moda. "
-                  "Responde sempre em PT-PT, com a estrutura completa dos 14 pontos, sem simplificar, "
+                  "És um assistente de direção de arte e moda."
+                  "Responde sempre em PT-PT, com a estrutura completa dos 14 pontos, sem simplificar,"
                   "e mantendo o ponto 1 exatamente como está escrito."
               )
               user = [
