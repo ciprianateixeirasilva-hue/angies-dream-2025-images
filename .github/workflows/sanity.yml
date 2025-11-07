@@ -1,4 +1,4 @@
-name: Auto-Descricao-24x7 (sanity)
+name: Auto-Descricao-24x7
 
 on:
   schedule:
@@ -20,7 +20,6 @@ jobs:
       STATE_FILE: .state/processed.json
       MIN_GAP_MINUTES: "190"
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout
