@@ -1,11 +1,206 @@
-name: Sanity-YAML
+name: Auto-Descricao-24x7
 
 on:
+  schedule:
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  test:
+  run:
     runs-on: ubuntu-latest
+
+    env:
+      REPO: ${{ github.repository }}
+      BRANCH: main
+      IMAGES_DIR: images
+      OUTPUTS_DIR: outputs
+      STATE_DIR: .state
+      STATE_FILE: .state/processed.json
+      MIN_GAP_MINUTES: "190"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
-      - name: Echo OK
-        run: echo "OK"
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          persist-credentials: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install openai==1.51.0 requests==2.32.3
+
+      - name: Create worker script
+        shell: bash
+        run: |
+          mkdir -p "$STATE_DIR" "$OUTPUTS_DIR"
+          cat > worker.py << 'PY'
+          import os, json, datetime, glob
+          from pathlib import Path
+          import requests
+          from openai import OpenAI
+
+          # --- helpers ---
+          def now_utc():
+              return datetime.datetime.utcnow()
+
+          def iso(dt):
+              return dt.strftime("%Y-%m-%d_%H-%M")
+
+          def iso_full(dt):
+              return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+          # --- env ---
+          REPO = os.environ["REPO"]
+          BRANCH = os.environ.get("BRANCH", "main")
+          IMAGES_DIR = os.environ.get("IMAGES_DIR", "images")
+          OUTPUTS_DIR = os.environ.get("OUTPUTS_DIR", "outputs")
+          STATE_DIR = os.environ.get("STATE_DIR", ".state")
+          STATE_FILE = os.environ.get("STATE_FILE", ".state/processed.json")
+          MIN_GAP = int(os.environ.get("MIN_GAP_MINUTES", "190"))
+
+          # --- state ---
+          Path(STATE_DIR).mkdir(parents=True, exist_ok=True)
+          if os.path.exists(STATE_FILE):
+              with open(STATE_FILE, "r", encoding="utf-8") as f:
+                  state = json.load(f)
+          else:
+              state = {"processed": [], "last_cycle_finished_at": None}
+
+          processed = set(state.get("processed", []))
+          last_done = state.get("last_cycle_finished_at")
+
+          # respect 190 min gap
+          if last_done:
+              s = last_done.replace("Z", "")
+              try:
+                  last_dt = datetime.datetime.strptime(s, "%Y-%m-%dT%H:%M:%S")
+              except Exception:
+                  last_dt = datetime.datetime.fromisoformat(s)
+              delta_min = (now_utc() - last_dt).total_seconds() / 60.0
+              if delta_min < MIN_GAP:
+                  print(f"SKIP: only {delta_min:.1f} minutes since last cycle (<{MIN_GAP}).")
+                  raise SystemExit(0)
+
+          # list images FIFO
+          imgs = sorted([p for p in glob.glob(f"{IMAGES_DIR}/*") if os.path.isfile(p)])
+          unprocessed = [os.path.basename(p) for p in imgs if os.path.basename(p) not in processed]
+
+          if not unprocessed:
+              print("Nothing new to process.")
+              raise SystemExit(0)
+
+          client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+          ts = iso(now_utc())
+          out_path = Path(OUTPUTS_DIR) / f"output-descricoes-{ts}.txt"
+          Path(OUTPUTS_DIR).mkdir(parents=True, exist_ok=True)
+
+          # ---- estrutura 14 pontos (COMPLETA) ----
+          PONTO1_TEXTO_EXATO = (
+              "1. Usando a minha imagem, Recrie essa mesma imagem, porém melhorando a sua qualidade, "
+              "trazendo para uma câmera profissional 8k HD resolution, hiper-realistic, melhorando apenas a qualidade da imagem. "
+              "Retire esse excesso de granulação e deixe mais nítida, como uma cena de filme, sem alterar minhas características físicas, "
+              "idade, gênero, sem distorções rosto ou corpo, sem pele plástica, o corpo da mulher é size médium, busto 100 taça C."
+          )
+
+          ESTRUTURA_14 = f"""{PONTO1_TEXTO_EXATO}
+# ---- estrutura 15 pontos --------
+PONTO1_TEXTO_EXATO = (
+    "1. Usando a minha imagem, Recrie essa mesma imagem, porém melhorando a sua qualidade, "
+    "trazendo para uma câmera profissional 8k HD resolution, hiper-realistic, melhorando apenas a qualidade da imagem. "
+    "Retire esse excesso de granulação e deixe mais nítida, como uma cena de filme, sem alterar minhas características físicas, "
+    "idade, gênero, sem distorções rosto ou corpo, sem pele plástica, o corpo da mulher é size médium, busto 100 taça C."
+)
+
+ESTRUTURA_15 = f"""{PONTO1_TEXTO_EXATO}
+2. Rosto e Expressão: Descreve o rosto com atenção aos traços, expressão e iluminação. Observa o olhar, a direção do rosto, a maquilhagem e a harmonia facial. Realça a textura natural da pele e o equilíbrio entre luz e sombra, mantendo sempre a coloração realista.
+3. Cabelo: Descreva tecnicamente o cabelo da pessoa na imagem, detalhando: Cor Base e Reflexos: (ex: Castanho escuro com reflexos acobreados, Loiro platinado com raiz natural aparente), Comprimento: (ex: Curto na altura do queixo, Médio até os ombros, Longo até a cintura), Tipo de Corte: (ex: Bob assimétrico, Camadas longas, Pixie, Reto), Textura Natural: (ex: Liso escorrido, Ondulado suave, Cacheado definido, Crespo volumoso, com volume, brilho natural), Penteado Atual: (ex: Solto e natural, Coque alto despojado, Rabo de cavalo elegante, Trança espinha de peixe lateral, puxado para trás), Volume: (ex: Alto volume na raiz, Pouco volume, Volume concentrado nas pontas), Brilho: (ex: Alto brilho, Brilho discreto, Acabamento matte), Repartição: (ex: Linha reta ao meio, Linha lateral profunda, Sem repartição visível), Franja/Grades (se houver): (ex: Franja reta, Franja cortina, Grades laterais), Condição Visível: (ex: Fios saudáveis e sedosos, Aparência seca, Pontas duplas perceptíveis). Acessórios: (ex: Tiara, Grampos decorados, Faixa de cabelo, chapéu, boina, lenço, tule, boné, gorro).
+4. Corpo e Pose: Descreve a postura e o posicionamento corporal com elegância: Postura Corporal: (ex: ereta, curvada, relaxada, tensa), Orientação do Tronco: (ex: levemente inclinado para frente/trás/lados, torcido), Posição da Cabeça: (ex: ligeiramente inclinada, reta, voltada para a câmera/lado, queixo elevado/abaixado), Ombros: (ex: relaxados, tensos, elevados, retraídos), Braços: (ex: relaxados ao lado do corpo, cruzados, dobrados, estendidos - e a posição dos cotovelos), Mãos: (ex: nos bolsos, apoiadas na cintura, gestuais, abertas, fechadas - e a posição dos dedos), Pernas: (ex: juntas, afastadas, cruzadas, uma à frente da outra - e a posição dos joelhos), Pés: (ex: paralelos, um à frente, ponta dos pés, peso em um pé), Linhas de Movimento: Descreva as principais linhas criadas pela pose que sugerem movimento ou estática. Evita interpretações emocionais excessivas: mantém um tom profissional e visual.
+5. Roupas: Descreva tecnicamente as roupas da pessoa na imagem, detalhando: Peça Superior: (ex: Blusa de seda com decote V, Camisa de algodão Oxford, Suéter de lã merino), Cor/Padrão: (ex: Vermelho vivo, Listras finas, Xadrez tartan), Material/Tecido: (ex: Viscose, Linho, Couro, Denim, látex, vini, rendas, lantejoulas, cetim, seda, veludo, renda, algodão ), Corte/Caimento: (ex: Slim fit, Oversized, Cropped, Godê), Detalhes: (ex: sem mangas, com mangas compridas, gola alta, decote em V, tomara-que-caia, cintura marcada, com fenda, estruturado, fluido, Mangas bufantes, Gola padre, Babados, Bordados, transparentes, translúcidos), Peça Inferior: (ex: Calça jeans skinny, Saia midi plissada, mini saia, calção, Bermuda de alfaiataria), Cor/Padrão: (ex: Azul índigo, Floral abstrato, Preto liso), Material/Tecido: (ex: : lantejoulas, cetim, seda, veludo, renda, vinil, couro, algodão,  Jeans, Crepe, Veludo, Lã), Corte/Caimento: (ex: Reta, Evasê, Cenoura, Flare), Detalhes: (ex: Cinto embutido, Bolsos cargo, Fenda lateral), Peça Única: (ex: Vestido longo de festa, Macacão utilitário), Cor/Padrão/Material/Corte/Detalhes: (conforme as categorias acima), Peças de Terceira Camada: (ex: Blazer estruturado, Jaqueta de couro, Sobretudo), Cor/Padrão/Material/Corte/Detalhes: (conforme as categorias acima), Coerência/Contraste: Descreva como as diferentes peças se harmonizam ou criam contraste no conjunto. Preste atenção especial a logotipos, padrões de grife ou características que possam indicar a marca ou a tendência de moda.
+6. Calçado: Descreva tecnicamente o calçado principal da imagem, detalhando: Tipo: (ex: Scarpin, Tênis, Bota Ankle), Material da Parte Superior: (ex: Couro liso, Camurça, Tecido de lona, Sintético), Cor: (Especificar tons e nuances), Bico: (ex: Fino, Arredondado, Quadrado, Aberto), Salto (se houver): (ex: Agulha, Bloco, Anabela, Plataforma - altura aproximada e material), Sola: (ex: Borracha, Couro, Crepe - espessura e textura), Fecho/Ajuste: (ex: Cadarços, Zíper, Fivelas, Slip-on), Detalhes Notáveis: (ex: brilho, padrões, Perfurações brogue, Aplicações, Franjas, Bordados, Texturas especiais, Acabamentos metálicos). Preste atenção especial a logotipos, padrões de grife ou características que possam indicar a marca ou a tendência de moda
+7. Acessórios: Descreva tecnicamente os acessórios da pessoa na imagem, detalhando: Tipo e Posicionamento: (ex: Brincos pendentes na orelha esquerda, Colar de corrente no pescoço, Anéis no dedo anelar direito, pulseira, bolsa, óculos, cinto, lenço, relógio, chapéu), Material Principal: (ex: Ouro amarelo 18k, Prata esterlina, Couro legítimo, Seda), Cor: (Especificar tons e nuances, incluindo de pedras se aplicável), Estilo/Design: (ex: Minimalista, Boêmio, Clássico, Moderno, Vintage - com detalhes de forma e padrão), Detalhes Notáveis: (ex: Pedras facetadas, Gravações, Fechos visíveis, Logotipos, Texturas especiais, Acabamentos foscos/brilhantes), Tamanho/Proporção: (ex: Brincos grandes e vistosos, Anel delicado, Bolsa média). Preste atenção especial a logotipos ou características que possam indicar a marca (ex: bolsa Chanel, relógio Rolex, óculos Ray-Ban.
+8. Ambiente e Fundo: Descreva tecnicamente o ambiente e o fundo da imagem detalhando: O ambiente deve ser descrito com precisão visual e sensibilidade artística, mantendo sempre a fidelidade ao cenário original. Tipo de Cenário: (ex: Interior de um apartamento moderno, Exterior de uma floresta densa, Rua movimentada de cidade histórica), Elementos  Arquitetônicos/Naturais: (ex: Paredes de tijolo exposto, Janelas grandes, Árvores centenárias, portas, grade, Montanhas, Edifícios clássicos), Mobiliário/Objetos: (ex: Sofá de veludo, Mesa de centro de vidro, loiça, talheres, Estante de livros, Vaso de plantas, Carros estacionados), Paleta de Cores: (ex: Tons neutros de cinza e branco, Cores vibrantes primárias, Tons terrosos e verdes). Iluminação: Fonte: (ex: Luz natural da janela, Luz artificial de holofotes, Pôr do sol), Qualidade: (ex: Difusa e suave, Dura e contrastante, Quente e amarelada, Fria e azulada), Direção: (ex: Vinda da direita, Frontal, Contraluz), Texturas Visíveis: (ex: Superfícies lisas e polidas, Rugosidade de rochas, Aspereza de concreto, (madeira, metal, pedra, tecido, vidro, areia, fundo liso, parede texturizada), Profundidade de Campo: (ex: Fundo completamente desfocado (rasa), Fundo nítido (profunda)), Distância do Fundo: (ex: Próximo ao sujeito, Muito distante), Elementos Atmosféricos (se houver): (ex: Névoa, Neve, Chuva, Poeira, Fumaça), Sensação Espacial: (ex: Aberto e arejado, Confinado e íntimo, Grandioso e imponente). O objetivo é garantir uma leitura fotográfica fiel e imersiva, que preserve a autenticidade da imagem e o equilíbrio cromático entre o cenário e a figura principal.
+9. Coloração Realista: Todas as descrições devem respeitar os tons de pele, cabelo, roupa e cenário originais. O equilíbrio entre luz e sombra deve ser mantido fiel à fotografia.
+10. Estilo e Intenção Visual: Define o tom artístico — por exemplo: “editorial de moda de luxo”, “retrato artístico”, “campanha publicitária”, “conceito futurista”, “Cinematográfico” — conforme a imagem.
+11. Tipos de fotografia a ser categorizados: Close-up (Primeiro Plano) foca no rosto e ombros do sujeito; Plano Médio enquadra da cintura ou dos joelhos para cima; Plano Americano inclui o corpo da cabeça aos joelhos; Plano de Corpo Inteiro mostra a figura inteira no seu ambiente.
+12. Tipos de ângulos da imagem: Ângulo Normal (câmara na altura dos olhos), Plongée (de cima para baixo), Contra-Plongée (de baixo para cima).
+13. Descreva tecnicamente as tatuagens visíveis na pessoa da imagem, detalhando para cada uma: Localização Precisa (ex: antebraço direito interno, ombro esquerdo, costas – lombar, pescoço, mãos), Dimensões Aproximadas, Estilo (ex: realismo P&B, old school saturado, geométrico/dotwork), Tema/Motivo (ex: leão rugindo, buquê de rosas, padrão maori, citação caligráfica), Paleta de Cores (ex: tons de azul/roxo vibrantes, apenas preto e cinza, sépia), Linework (linhas finas/delicadas ou grossas/ousadas), Sombreado (suave/gradual, alto contraste, pontilhismo), Destaques/Brilho (toques de branco, efeito molhado), Condição (cores frescas, linhas ligeiramente expandidas), e Composição (peças isoladas, manga completa, colar de tatuagens) quando houver múltiplas.
+14. Descreva tecnicamente o animal/ave/réptil/peixe/ser na imagem, detalhando: Espécie/Tipo; Coloração e Padrões; Textura (pelagem/penas/escamas/pele); Características anatómicas (ex: garras, olhos, bico, barbatanas, asas); Tamanho/Proporção vs. entorno; Linguagem corporal/pose; Condição; Movimento/Posição em relação à pessoa (ex: ao lado, atrás, no colo, salto, empoleirado, enrolado, nadando); Elementos únicos (ex: chifres, antenas, bioluminescência) e interação visual/emoção transmitida.
+15. Prompt: com base na descrição em cima, crie um Prompt para Midjourney. Estrutura do Prompt (Priorização e Parâmetros Base): começar com identificação do sujeito principal e incluir imediatamente --style raw --v 5.2; adicionar frases de qualidade/realismo (ex: Hyper-realistic fashion portrait, 8k HD resolution, ultra-photorealistic, no illustration, no cartoon, shot on [câmara] with a [lente]). Em seguida, injetar termos por categoria (textura/materialidade; luz/sombras; foco/profundidade; movimento/vida; qualidade/acabamento; detalhamento extremo). Parâmetros finais obrigatórios: --ar [2:3 / 16:9 conforme a imagem] --quality 2 --s 750 --style raw --v 5.2. Garantir coesão, detalhamento e realismo absoluto.
+"""
+
+
+          def build_messages(img_url, filename):
+              system = (
+                  "És um assistente de direção de arte e moda. "
+                  "Responde sempre em PT-PT, com a estrutura completa dos 14 pontos, sem simplificar, "
+                  "e mantendo o ponto 1 exatamente como está escrito."
+              )
+              user = [
+                  {"type":"text","text": f"FILENAME: {filename}"},
+                  {"type":"image_url","image_url":{"url": img_url}},
+                  {"type":"text","text": ESTRUTURA_15}
+              ]
+              return system, user
+
+          raw_base = f"https://raw.githubusercontent.com/{REPO}/{BRANCH}/{IMAGES_DIR}"
+          results = []
+          processed_now = []
+
+          for fname in unprocessed:
+              img_url = f"{raw_base}/{requests.utils.quote(fname)}"
+              system, user = build_messages(img_url, fname)
+              try:
+                  resp = client.chat.completions.create(
+                      model="gpt-4o-mini",
+                      temperature=0.3,
+                      messages=[
+                          {"role":"system","content":system},
+                          {"role":"user","content":user}
+                      ]
+                  )
+                  text = resp.choices[0].message.content.strip()
+              except Exception as e:
+                  text = f"[ERRO ao gerar descrição para {fname}: {e}]"
+
+              block = f"{fname}\n{text}\n\n"
+              results.append(block)
+              processed.add(fname)
+              processed_now.append(fname)
+
+          with open(out_path, "w", encoding="utf-8") as f:
+              f.write("\n".join(results).strip() + "\n")
+          print(f"Escrito: {out_path} (itens: {len(processed_now)})")
+
+          state["processed"] = sorted(processed)
+          state["last_cycle_finished_at"] = iso_full(now_utc())
+          with open(STATE_FILE, "w", encoding="utf-8") as f:
+              json.dump(state, f, ensure_ascii=False, indent=2)
+          PY
+
+      - name: Run worker
+        run: python worker.py
+
+      - name: Commit & Push outputs/state
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$OUTPUTS_DIR" || true
+          git add "$STATE_DIR" || true
+          if git diff --cached --quiet; then
+            echo "Nada para commitar."
+          else:
+            git commit -m "Auto: descrições + estado ($(date -u +'%Y-%m-%d %H:%M UTC'))"
+            git push origin "$BRANCH"
+          fi
