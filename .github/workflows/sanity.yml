@@ -40,7 +40,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install openai==1.51.0 requests==2.32.3
 
-      - name: Create worker script
+- name: Create worker script
         shell: bash
         run: |
           mkdir -p "$STATE_DIR" "$OUTPUTS_DIR"
@@ -107,11 +107,7 @@ jobs:
           Path(OUTPUTS_DIR).mkdir(parents=True, exist_ok=True)
 
           # ---- estrutura 14 pontos (COMPLETA) ----
-          PONTO1_TEXTO_EXATO = (
-              "1. Usando a minha imagem, Recrie essa mesma imagem, porém melhorando a sua qualidade, "
-              "trazendo para uma câmera profissional 8k HD resolution, hiper-realistic, melhorando apenas a qualidade da imagem. "
-              "Retire esse excesso de granulação e deixe mais nítida, como uma cena de filme, sem alterar minhas características físicas, "
-              "idade, gênero, sem distorções rosto ou corpo, sem pele plástica, o corpo da mulher é size médium, busto 100 taça C."
+          PONTO1_TEXTO_EXATO = """1. Usando a minha imagem, Recrie essa mesma imagem, porém melhorando a sua qualidade, trazendo para uma câmera profissional 8k HD resolution, hiper-realistic, melhorando apenas a qualidade da imagem. Retire esse excesso de granulação e deixe mais nítida, como uma cena de filme, sem alterar minhas características físicas, idade, gênero, sem distorções rosto ou corpo, sem pele plástica, o corpo da mulher é size médium, busto 100 taça C."""
           )
 
           ESTRUTURA_14 = f"""{PONTO1_TEXTO_EXATO}
@@ -176,7 +172,7 @@ jobs:
           state["last_cycle_finished_at"] = iso_full(now_utc())
           with open(STATE_FILE, "w", encoding="utf-8") as f:
               json.dump(state, f, ensure_ascii=False, indent=2)
-          PY
+PY
 
       - name: Run worker
         run: python worker.py
