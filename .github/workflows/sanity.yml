@@ -1,4 +1,46 @@
-      - name: Create worker script
+     name: Auto-Descricao-24x7
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    env:
+      REPO: ${{ github.repository }}
+      BRANCH: main
+      IMAGES_DIR: images
+      OUTPUTS_DIR: outputs
+      STATE_DIR: .state
+      STATE_FILE: .state/processed.json
+      MIN_GAP_MINUTES: "190"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          persist-credentials: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install openai==1.51.0 requests==2.32.3
+
+            - name: Create worker script
         shell: bash
         run: |
           mkdir -p "$STATE_DIR" "$OUTPUTS_DIR"
