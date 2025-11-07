@@ -11,7 +11,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    env:
+  env:
       REPO: ${{ github.repository }}
       BRANCH: main
       IMAGES_DIR: images
@@ -21,7 +21,7 @@ jobs:
       MIN_GAP_MINUTES: "190"
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-    steps:
+  steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
